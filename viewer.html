@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="az" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Viewer</title>
+<style>
+:root{
+  --bg:#eef2f7; --bg2:#e4ebf5; --card:#ffffff; --card2:#f7f9fc; --text:#142033; --muted:#64748b;
+  --line:#dbe3ef; --accent:#4f46e5; --accent2:#06b6d4; --accent-soft:#eef0ff;
+  --ok:#15803d; --ok-bg:#e8f9ee; --ok-line:#86e0a4; --shadow:0 10px 30px rgba(30,41,90,.10);
+  --radius:14px; --topbar:3.9rem;
+  --pad:clamp(10px,1.2vw,22px); --gap:clamp(10px,1.1vw,20px);
+}
+[data-theme="dark"]{
+  --bg:#0d1424; --bg2:#101a30; --card:#16203a; --card2:#1b2745; --text:#e8eefc; --muted:#93a1c0;
+  --line:#26345a; --accent:#818cf8; --accent2:#22d3ee; --accent-soft:#1f2850;
+  --ok:#4ade80; --ok-bg:#12301f; --ok-line:#1f7a43; --shadow:0 10px 30px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+/* UI miqyası: həm ekran eninə, həm hündürlüyünə görə (Windows 125%/150% scaling və Mac Retina ekranlarında da sığsın) */
+html{font-size:clamp(12.5px,min(.22vw + 10.6px,1.5vh + 3.2px),16px);height:100%}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--text);
+  background:radial-gradient(1200px 500px at 0% -10%,rgba(79,70,229,.14),transparent 60%),
+             radial-gradient(900px 500px at 100% 0%,rgba(6,182,212,.14),transparent 55%),var(--bg);
+  height:100%;overflow:hidden}
+/* hər görünüş ekrana sabitlənir: yuxarı panel + aşağıda sürüşən sahə */
+.view{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.scroller{overflow-y:auto;overscroll-behavior:contain;min-height:0}
+button,input,select{font:inherit;color:inherit}
+
+/* top bar */
+.topbar{position:relative;flex:none;z-index:20;height:var(--topbar);display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;padding:0 clamp(12px,2vw,32px);background:linear-gradient(100deg,var(--accent),var(--accent2));color:#fff;
+  box-shadow:0 6px 20px rgba(79,70,229,.3)}
+.brand{display:flex;align-items:center;gap:.8rem;min-width:0}
+.logo{width:2.5rem;height:2.5rem;border-radius:12px;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:1.3rem}
+.brand h1{margin:0;font-size:1.25rem;line-height:1.1}
+.brand p{margin:2px 0 0;font-size:.78rem;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.actions{display:flex;align-items:center;gap:.6rem;flex-shrink:0}
+.btn{border:0;cursor:pointer;border-radius:12px;padding:.6rem 1rem;font-weight:600;display:inline-flex;align-items:center;gap:.5rem;
+  transition:transform .12s,box-shadow .12s,opacity .12s}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.55;cursor:wait;transform:none}
+.btn-light{background:#fff;color:#3730a3;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.btn-ghost{background:rgba(255,255,255,.18);color:#fff}
+.btn-primary{background:linear-gradient(100deg,var(--accent),var(--accent2));color:#fff;width:100%;justify-content:center;box-shadow:0 8px 18px rgba(79,70,229,.3)}
+.btn-line{background:var(--card2);border:1px solid var(--line);color:var(--text)}
+
+/* layout */
+/* sol menyu sabit sütundur; yalnız sağdakı suallar sürüşür */
+.layout{flex:1;min-height:0;width:100%;max-width:2000px;margin:0 auto;display:grid;
+  grid-template-columns:clamp(240px,20vw,340px) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.sidebar{min-height:0;padding:var(--pad) 0 var(--pad) var(--pad);overflow:visible}
+.sidebar.scroll{overflow-y:auto;overscroll-behavior:contain}
+.sidebar-inner{display:flex;flex-direction:column;gap:12px}
+.content{padding:var(--pad) var(--pad) var(--pad) var(--gap)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:1rem}
+.card h3{margin:0 0 .65rem;font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sidebar .card{padding:.9rem 1rem}
+.field{margin-bottom:.7rem}
+.field:last-child{margin-bottom:0}
+label.lbl{display:block;font-size:.85rem;color:var(--muted);margin-bottom:.3rem}
+select,input[type=text],input[type=password],input[type=number]{width:100%;padding:.55rem .75rem;border-radius:10px;border:1px solid var(--line);background:var(--card2);outline:none}
+select:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.5rem .75rem;border-radius:10px;background:var(--card2);
+  border:1px solid var(--line);margin-bottom:.45rem;cursor:pointer;font-size:.92rem}
+.switch:last-child{margin-bottom:0}
+.switch input{appearance:none;width:2.6rem;height:1.5rem;border-radius:999px;background:#b6c0d4;position:relative;cursor:pointer;transition:.2s;flex-shrink:0;margin:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:calc(1.5rem - 6px);height:calc(1.5rem - 6px);border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{left:calc(2.6rem - 1.5rem + 3px)}
+.stats{background:linear-gradient(135deg,var(--accent-soft),var(--card));line-height:1.6;font-size:.9rem;word-break:break-word}
+
+/* content */
+.content{min-width:0}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;padding:1rem 1.2rem}
+.toolbar h2{margin:0;font-size:clamp(1.15rem,1.2vw + .8rem,1.7rem)}
+.toolbar p{margin:.25rem 0 0;color:var(--muted)}
+.chips{display:flex;gap:.5rem;flex-wrap:wrap}
+.chip{padding:.35rem .8rem;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:.85rem}
+.question-list{display:grid;gap:clamp(12px,1.2vw,20px)}
+.question-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(14px,1.4vw,24px);box-shadow:var(--shadow);position:relative}
+.question-meta{display:flex;justify-content:space-between;align-items:center;gap:.8rem;margin-bottom:.8rem}
+.qnum{background:linear-gradient(100deg,var(--accent),var(--accent2));color:#fff;font-weight:700;padding:.3rem .9rem;border-radius:999px;font-size:.88rem}
+.qpage{color:var(--muted);font-size:.82rem}
+.question-text{font-size:1.1rem;line-height:1.65;margin-bottom:1rem;white-space:pre-wrap;font-weight:500}
+.image-group{display:flex;flex-wrap:wrap;gap:12px;margin:.6rem 0 1rem}
+.image-group img{max-width:100%;width:min(420px,100%);height:auto;border-radius:12px;border:1px solid var(--line);background:#fff;padding:6px}
+.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
+.option{border:1px solid var(--line);border-radius:14px;padding:.8rem .95rem;background:var(--card2);transition:border-color .15s}
+.option:hover{border-color:var(--accent)}
+.option.correct{border-color:var(--ok-line);background:var(--ok-bg)}
+.option-head{display:flex;align-items:flex-start;gap:.7rem;font-weight:500;line-height:1.5}
+.badge{min-width:2rem;height:2rem;border-radius:10px;display:inline-grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:700;flex-shrink:0}
+.correct .badge{background:#16a34a;color:#fff}
+.correct-note{color:var(--ok);font-size:.82rem;font-weight:600;margin:.35rem 0 0 2.7rem}
+.empty{border:2px dashed var(--line);border-radius:var(--radius);padding:2.5rem;text-align:center;color:var(--muted);background:var(--card)}
+.to-top{position:fixed;right:clamp(14px,2vw,32px);bottom:clamp(14px,2vw,32px);width:3rem;height:3rem;border-radius:50%;border:0;cursor:pointer;
+  background:linear-gradient(100deg,var(--accent),var(--accent2));color:#fff;font-size:1.3rem;box-shadow:0 8px 20px rgba(79,70,229,.4);opacity:0;pointer-events:none;transition:.2s}
+.to-top.show{opacity:1;pointer-events:auto}
+
+/* upload dialog */
+dialog{border:0;border-radius:20px;padding:0;width:min(520px,92vw);background:var(--card);color:var(--text);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,15,35,.55);backdrop-filter:blur(3px)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:1.1rem 1.3rem;border-bottom:1px solid var(--line)}
+.dlg-head h3{margin:0;font-size:1.1rem}
+.dlg-x{border:0;background:var(--card2);width:2.2rem;height:2.2rem;border-radius:10px;cursor:pointer;font-size:1.1rem}
+.dlg-body{padding:1.3rem}
+.file-pick{display:flex;align-items:center;gap:.8rem;padding:1rem;border:2px dashed var(--line);border-radius:14px;background:var(--card2);cursor:pointer;margin-bottom:1rem}
+.file-pick:hover{border-color:var(--accent)}
+.file-pick input{display:none}
+.file-pick .ico{font-size:1.6rem}
+.file-pick span.name{word-break:break-all}
+details.adv{margin:.2rem 0 1rem}
+details.adv summary{cursor:pointer;color:var(--muted);font-size:.88rem;margin-bottom:.6rem}
+.job-status{margin-top:1rem;padding:.8rem 1rem;border-radius:12px;background:var(--card2);color:var(--muted);white-space:pre-wrap;word-break:break-word;font-size:.9rem}
+
+/* kiçik ekranda da menyu solda qalır, sadəcə düymə yazıları gizlənir */
+@media (max-width:900px){
+  .brand p{display:none}
+  .btn .t{display:none}
+}
+
+.hidden{display:none!important}
+:root{--bad:#b91c1c;--bad-bg:#fdecec;--bad-line:#f5a3a3}
+[data-theme="dark"]{--bad:#f87171;--bad-bg:#3a1618;--bad-line:#8c2b2b}
+.cta{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:0}
+.cta h3{color:rgba(255,255,255,.85)}
+.cta p{margin:0 0 .9rem;font-size:.9rem;opacity:.92;line-height:1.5}
+.btn-white{background:#fff;color:#3730a3;width:100%;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.hint{font-size:.85rem;color:var(--muted);margin:.2rem 0 1rem;line-height:1.5}
+.err{color:var(--bad);font-size:.88rem;min-height:1.2rem;margin-bottom:.6rem}
+.dlg-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:.4rem}
+.dlg-actions .btn-primary{width:auto}
+.exam-top{justify-content:space-between}
+.timer{font-variant-numeric:tabular-nums;font-size:clamp(1.4rem,1.6vw + .8rem,2.2rem);font-weight:800;background:rgba(255,255,255,.18);padding:.15rem 1.1rem;border-radius:14px;letter-spacing:.03em}
+.timer.low{background:#f59e0b}
+.timer.warn{background:#dc2626;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.7}}
+.exam-layout{flex:1;min-height:0;width:100%;max-width:2000px;margin:0 auto;display:grid;
+  grid-template-columns:minmax(0,1fr) clamp(220px,19vw,320px);grid-template-rows:minmax(0,1fr)}
+.exam-main{padding:var(--pad) var(--gap) var(--pad) var(--pad)}
+.exam-side-col{min-height:0;display:flex;align-items:flex-start;padding:var(--pad) var(--pad) var(--pad) 0}
+.exam-side{width:100%;max-height:100%;overflow-y:auto;overscroll-behavior:contain}
+.result-scroll{flex:1}
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(2.6rem,1fr));gap:8px}
+.qb{aspect-ratio:1;border-radius:10px;border:1px solid var(--line);background:var(--card2);cursor:pointer;font-weight:600}
+.qb:hover{border-color:var(--accent)}
+.qb.answered{background:var(--accent);color:#fff;border-color:var(--accent)}
+.qb.flagged{outline:2px solid #f59e0b;outline-offset:1px}
+.qb.current{box-shadow:0 0 0 3px var(--accent2)}
+.legend{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:1rem;font-size:.78rem;color:var(--muted)}
+.exam-options{grid-template-columns:1fr}
+.opt{display:flex;gap:.8rem;align-items:flex-start;text-align:left;width:100%;border:1.5px solid var(--line);border-radius:14px;background:var(--card2);
+  padding:.9rem 1rem;cursor:pointer;line-height:1.5;font-size:1.02rem}
+.opt:hover{border-color:var(--accent)}
+.opt.selected{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px var(--accent-soft)}
+.opt.selected .badge{background:var(--accent);color:#fff}
+.opt-body{display:flex;flex-direction:column;gap:.5rem;min-width:0}
+.opt-body img{max-width:100%;width:min(360px,100%);border-radius:10px;border:1px solid var(--line);background:#fff;padding:4px}
+.exam-actions{display:flex;justify-content:space-between;gap:.6rem;margin-top:1rem;flex-wrap:wrap}
+.exam-actions .grp{display:flex;gap:.6rem}
+.btn-flag.on{background:#fef3c7;color:#92400e;border-color:#f59e0b}
+.option.wrong{border-color:var(--bad-line);background:var(--bad-bg)}
+.wrong .badge{background:#dc2626;color:#fff}
+.wrong-note{color:var(--bad);font-size:.82rem;font-weight:600;margin:.35rem 0 0 2.7rem}
+.result-wrap{max-width:1100px;margin:0 auto;padding:clamp(12px,1.6vw,28px);display:grid;gap:16px}
+.score-card{display:flex;align-items:center;gap:clamp(16px,3vw,40px);flex-wrap:wrap}
+.ring{--p:0;width:clamp(120px,12vw,170px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;flex-shrink:0;
+  background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--line) 0)}
+.ring>div{width:78%;aspect-ratio:1;border-radius:50%;background:var(--card);display:grid;place-items:center;font-size:clamp(1.4rem,2vw,2.2rem);font-weight:800}
+.score-info h2{margin:0 0 .5rem}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.gray{background:var(--card2);color:var(--muted)}
+.review-bar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{border:0;background:var(--card2);padding:.55rem 1rem;cursor:pointer;font-weight:600}
+.seg button.on{background:var(--accent);color:#fff}
+@media (max-width:560px){.grid2{grid-template-columns:1fr}}
+
+/* ===== lisenziya ekranı + admin ===== */
+body.locked .view{display:none!important}
+.auth-screen{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;overflow:auto;
+  background:radial-gradient(1000px 520px at 0% -10%,rgba(79,70,229,.22),transparent 60%),
+             radial-gradient(900px 520px at 100% 0%,rgba(6,182,212,.2),transparent 55%),var(--bg)}
+.auth-card{width:min(420px,100%);background:var(--card);border:1px solid var(--line);border-radius:20px;
+  box-shadow:0 30px 80px rgba(30,41,90,.18);padding:2rem 1.8rem 1.4rem}
+.auth-logo{width:3.4rem;height:3.4rem;border-radius:16px;display:grid;place-items:center;font-size:1.7rem;margin:0 auto .9rem;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 24px rgba(79,70,229,.35)}
+.auth-card h2{margin:0;text-align:center;font-size:1.4rem}
+.auth-sub{margin:.3rem 0 1.4rem;text-align:center;color:var(--muted);font-size:.92rem}
+.lic-wait{display:none;margin:.6rem 0 .3rem;text-align:center;color:var(--muted);font-size:.92rem}
+.auth-screen.checking .lic-wait{display:block}
+.auth-screen.checking .lic-form{display:none}
+input.key-input{font-family:Consolas,"Cascadia Mono","SF Mono",Menlo,monospace;font-size:1.05rem;letter-spacing:.08em;text-align:center;text-transform:uppercase}
+.auth-foot{margin:1rem 0 0;text-align:center;font-size:.8rem;color:var(--muted);line-height:1.5}
+/* lisenziya ekranı: solda açar, sağda satış */
+.lic-card{width:min(880px,100%)}
+.auth-screen.checking .lic-card{width:min(420px,100%)}
+.lic-head{display:flex;align-items:center;justify-content:center;gap:.8rem}
+.lic-head .auth-logo{width:2.8rem;height:2.8rem;font-size:1.4rem;margin:0;border-radius:14px}
+.lic-grid{display:grid;grid-template-columns:1fr 1.25fr;gap:1.6rem;margin-top:1.2rem;align-items:start}
+.lic-col{min-width:0}
+.lic-buy{border-left:1px solid var(--line);padding-left:1.6rem}
+.lic-title{margin:0 0 .2rem;font-size:1.05rem}
+.lic-grid .auth-sub{text-align:left;margin:.1rem 0 .9rem}
+.lic-grid .auth-foot{text-align:left}
+.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin:0 0 1rem}
+.plan{position:relative;border:1.5px solid var(--line);background:var(--card2);color:var(--text);border-radius:12px;
+  padding:.65rem .3rem .55rem;cursor:pointer;text-align:center;font:inherit}
+.plan:hover{border-color:var(--accent)}
+.plan b{display:block;font-size:.92rem}
+.plan .price{display:block;font-size:1.12rem;font-weight:800;color:var(--accent);margin-top:.15rem;white-space:nowrap}
+.plan small{display:block;font-size:.68rem;color:var(--muted);margin-top:.1rem;white-space:nowrap}
+.plan.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px var(--accent-soft)}
+.plan .tag{position:absolute;top:-.6rem;left:50%;transform:translateX(-50%);background:var(--accent2);color:#fff;
+  font-size:.6rem;font-weight:700;padding:.05rem .45rem;border-radius:999px;white-space:nowrap}
+.buy-steps{margin:0;padding-left:1.2rem;display:grid;gap:.85rem;font-size:.9rem;line-height:1.45}
+.buy-steps li::marker{font-weight:800;color:var(--accent)}
+.copy-row{display:flex;align-items:center;gap:.5rem;margin-top:.35rem}
+.copy-row code{flex:1;min-width:0;font-family:Consolas,"Cascadia Mono","SF Mono",Menlo,monospace;font-size:1rem;font-weight:700;
+  letter-spacing:.04em;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:.45rem .7rem;overflow-wrap:anywhere}
+.mail-btns{display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap}
+@media (max-width:760px){
+  .lic-grid{grid-template-columns:1fr}
+  .lic-buy{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:1.2rem}
+  .plans{grid-template-columns:repeat(2,1fr);row-gap:.9rem}
+}
+.corner-admin{position:absolute;right:14px;bottom:12px;border:0;background:transparent;color:var(--muted);font-size:.8rem;
+  cursor:pointer;opacity:.55;padding:.4rem .7rem;border-radius:10px}
+.corner-admin:hover{opacity:1;background:var(--card)}
+.icon-admin{border:0;background:transparent;color:#fff;opacity:.4;cursor:pointer;font-size:.95rem;padding:.45rem;border-radius:10px;line-height:1}
+.icon-admin:hover{opacity:1;background:rgba(255,255,255,.15)}
+.pass-wrap{position:relative}
+.pass-wrap input{padding-right:2.6rem}
+.pass-eye{position:absolute;right:.35rem;top:50%;transform:translateY(-50%);border:0;background:transparent;cursor:pointer;font-size:1rem;opacity:.6;padding:.3rem}
+.pass-eye:hover{opacity:1}
+/* admin: lisenziyalar paneli */
+dialog.wide{width:min(980px,96vw)}
+.add-license{display:grid;grid-template-columns:1fr auto auto;gap:.6rem;margin-bottom:.5rem}
+.add-license select{width:auto}
+.add-license .btn-primary{width:auto}
+.new-key{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.7rem .9rem;margin:.3rem 0 .5rem;
+  border-radius:12px;background:var(--ok-bg);border:1px solid var(--ok-line)}
+.new-key code{font-family:Consolas,"Cascadia Mono","SF Mono",Menlo,monospace;font-size:1.15rem;font-weight:700;letter-spacing:.06em;color:var(--ok)}
+.lic-tools{display:flex;align-items:center;gap:.8rem;margin:.5rem 0 .6rem}
+.lic-tools input{flex:1}
+.lic-tools .muted{white-space:nowrap}
+.lic-key{font-family:Consolas,"Cascadia Mono","SF Mono",Menlo,monospace;font-size:.84rem;white-space:nowrap}
+.icon-btn{border:0;background:transparent;cursor:pointer;padding:.15rem .3rem;border-radius:6px;opacity:.6}
+.icon-btn:hover{opacity:1;background:var(--card2)}
+.users-wrap{max-height:min(48vh,440px);overflow:auto;border:1px solid var(--line);border-radius:12px}
+.users-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.users-table th{position:sticky;top:0;background:var(--card2);text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted);padding:.6rem .7rem;border-bottom:1px solid var(--line)}
+.users-table td{padding:.5rem .7rem;border-bottom:1px solid var(--line);vertical-align:middle}
+.users-table tr:last-child td{border-bottom:0}
+.muted{color:var(--muted);font-size:.82rem}
+.chip.warn{background:rgba(245,158,11,.16);color:#d97706}
+.row-actions{display:flex;gap:.4rem;justify-content:flex-end}
+.btn-sm{padding:.35rem .65rem;font-size:.8rem;border-radius:9px}
+.btn-danger{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+.btn-danger.confirm{background:#dc2626;color:#fff;border-color:#dc2626}
+.users-empty{padding:1.4rem;text-align:center;color:var(--muted)}
+.ok-msg{color:var(--ok)}
+</style>
+</head>
+<body class="locked">
+<!-- ============ LİSENZİYA EKRANI ============ -->
+<div class="auth-screen checking" id="licenseScreen">
+  <form class="auth-card lic-card" id="licenseForm" autocomplete="off" novalidate>
+    <div class="lic-head">
+      <div class="auth-logo">🔑</div>
+      <h2>Quiz Viewer</h2>
+    </div>
+    <p class="lic-wait">Lisenziya yoxlanılır...</p>
+    <div class="lic-form lic-grid">
+      <section class="lic-col">
+        <h3 class="lic-title">Lisenziya açarın var?</h3>
+        <p class="auth-sub">Açarı daxil et və proqramı aktivləşdir</p>
+        <div class="field">
+          <label class="lbl" for="licenseKey">Lisenziya açarı</label>
+          <input id="licenseKey" class="key-input" type="text" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" maxlength="29" spellcheck="false" autocapitalize="characters">
+        </div>
+        <div class="err" id="licenseError"></div>
+        <button class="btn btn-primary" id="licenseButton" type="submit">Aktivləşdir</button>
+        <p class="auth-foot">Bir açar yalnız bir kompüterdə işləyir.</p>
+      </section>
+      <section class="lic-col lic-buy" id="licenseBuy">
+        <h3 class="lic-title">Lisenziya al</h3>
+        <p class="auth-sub">Tarifi seç:</p>
+        <div class="plans" id="planList"></div>
+        <ol class="buy-steps">
+          <li>
+            <span>Seçdiyin məbləği (<b id="buyAmount">—</b>) bu karta köçür:</span>
+            <div class="copy-row"><code id="buyCard"></code><button type="button" class="btn btn-line btn-sm" id="copyCard" title="Kart nömrəsini kopyala">📋</button></div>
+          </li>
+          <li>
+            <span>Ödəniş qəbzini (skrinşot) və seçdiyin tarifi bu e-poçta göndər:</span>
+            <div class="copy-row"><code id="buyEmail"></code><button type="button" class="btn btn-line btn-sm" id="copyEmail" title="E-poçtu kopyala">📋</button></div>
+            <div class="mail-btns">
+              <button type="button" class="btn btn-line btn-sm" id="mailGmail">✉ Gmail ilə yaz</button>
+              <button type="button" class="btn btn-line btn-sm" id="mailApp">Poçt proqramı ilə yaz</button>
+            </div>
+          </li>
+          <li>Lisenziya açarı e-poçtuna göndəriləcək. Onu soldakı xanaya yaz və <b>Aktivləşdir</b> bas.</li>
+        </ol>
+        <div class="err" id="buyMsg"></div>
+      </section>
+    </div>
+  </form>
+  <button class="corner-admin" id="cornerAdmin" type="button" title="Admin girişi">🔐 Admin</button>
+</div>
+
+<section class="view" id="viewerView">
+<header class="topbar" id="appTop">
+  <div class="brand">
+    <div class="logo">📝</div>
+    <div><h1>Quiz Viewer</h1><p>Fənni seç, suallara bax, PDF-i parse et</p></div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-ghost" id="themeButton" type="button" title="Tema">🌙<span class="t"> Tema</span></button>
+    <button class="btn btn-ghost" id="topExamButton" type="button">🎓<span class="t"> İmtahan</span></button>
+    <button class="btn btn-light" id="openUploadButton" type="button">📄<span class="t"> PDF əlavə et</span></button>
+    <button class="btn btn-ghost hidden" id="licensesButton" type="button" title="Lisenziyalar">🔑<span class="t"> Lisenziyalar</span></button>
+    <button class="btn btn-ghost hidden" id="adminLogout" type="button" title="Admin çıxışı">🚪<span class="t"> Admin çıxışı</span></button>
+    <button class="icon-admin" id="adminButton" type="button" title="Admin girişi">🔐</button>
+  </div>
+</header>
+
+<div class="layout" id="appLayout">
+  <aside class="sidebar" id="sidebar">
+   <div class="sidebar-inner" id="sidebarInner">
+    <section class="card cta">
+      <h3>İmtahan rejimi</h3>
+      <p>Aralıq, sual sayı və vaxtı seç, suallar təsadüfi seçilsin.</p>
+      <button class="btn btn-white" id="sideExamButton" type="button">🎓 İmtahana başla</button>
+    </section>
+    <section class="card">
+      <h3>Filtrlər</h3>
+      <div class="field">
+        <label class="lbl" for="subjectSelect">Fənn</label>
+        <select id="subjectSelect"></select>
+      </div>
+      <div class="field">
+        <label class="lbl" for="searchInput">Axtarış</label>
+        <input id="searchInput" type="text" placeholder="Sual və ya cavab üzrə axtar">
+      </div>
+      <div class="field">
+        <label class="lbl" for="questionNumberInput">Sual nömrəsi</label>
+        <input id="questionNumberInput" type="number" min="1" placeholder="Məsələn: 25">
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Görünüş</h3>
+      <label class="switch" for="correctOnly"><span>Yalnız doğru cavablar</span><input id="correctOnly" type="checkbox"></label>
+      <label class="switch" for="showAnswers"><span>Doğru cavabları vurğula</span><input id="showAnswers" type="checkbox" checked></label>
+    </section>
+
+    <section class="card stats" id="statsBox">Yüklənir...</section>
+   </div>
+  </aside>
+
+  <main class="content scroller" id="viewerScroll">
+    <div class="card toolbar">
+      <div>
+        <h2 id="subjectTitle">Fənn yüklənir...</h2>
+        <p id="subjectMeta">JSON məlumatı oxunur</p>
+      </div>
+    </div>
+    <div id="questionList" class="question-list"></div>
+  </main>
+</div>
+</section>
+
+<button class="to-top" id="toTop" type="button" title="Yuxarı">↑</button>
+
+<dialog id="uploadDialog">
+  <div class="dlg-head"><h3>PDF yüklə və parse et</h3><button class="dlg-x" id="closeUploadButton" type="button">✕</button></div>
+  <div class="dlg-body">
+    <label class="file-pick" for="pdfUploadInput">
+      <span class="ico">📎</span>
+      <span class="name" id="fileName">PDF faylı seçmək üçün kliklə</span>
+      <input id="pdfUploadInput" type="file" accept=".pdf,application/pdf">
+    </label>
+    <details class="adv">
+      <summary>Əlavə ayarlar</summary>
+      <label class="lbl" for="outputDirInput">Yazılacaq qovluq</label>
+      <input id="outputDirInput" type="text" value="D:/projectss/python/onlineexam/parsed_output">
+    </details>
+    <button id="uploadButton" class="btn btn-primary" type="button">PDF-i parse et</button>
+    <div id="jobStatus" class="job-status">Hələ job başladılmayıb.</div>
+    <button id="afterParseExam" class="btn btn-primary hidden" type="button" style="margin-top:.8rem">🎓 İmtahana başla</button>
+  </div>
+</dialog>
+
+<dialog id="examDialog">
+  <div class="dlg-head"><h3>🎓 İmtahan parametrləri</h3><button class="dlg-x" id="examCloseButton" type="button">✕</button></div>
+  <div class="dlg-body">
+    <div class="field"><label class="lbl" for="examSubject">Fənn</label><select id="examSubject"></select></div>
+    <div class="grid2">
+      <div class="field"><label class="lbl" for="examFrom">Sual aralığı: başlanğıc</label><input id="examFrom" type="number" min="1"></div>
+      <div class="field"><label class="lbl" for="examTo">Sual aralığı: son</label><input id="examTo" type="number" min="1"></div>
+      <div class="field"><label class="lbl" for="examCount">Sual sayı</label><input id="examCount" type="number" min="1" value="25"></div>
+      <div class="field"><label class="lbl" for="examMinutes">Vaxt (dəqiqə)</label><input id="examMinutes" type="number" min="1" value="30"></div>
+    </div>
+    <div class="hint" id="examInfo"></div>
+    <div class="err" id="examError"></div>
+    <div class="dlg-actions">
+      <button class="btn btn-line" id="examCancelButton" type="button">Ləğv et</button>
+      <button class="btn btn-primary" id="examStartButton" type="button">Başla</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="adminDialog">
+  <div class="dlg-head"><h3>🔐 Admin girişi</h3><button class="dlg-x" id="adminClose" type="button">✕</button></div>
+  <form class="dlg-body" id="adminForm" autocomplete="off" novalidate>
+    <div class="field">
+      <label class="lbl" for="adminEmail">E-poçt</label>
+      <input id="adminEmail" type="text" autocomplete="username" spellcheck="false" autocapitalize="off">
+    </div>
+    <div class="field">
+      <label class="lbl" for="adminPass">Parol</label>
+      <div class="pass-wrap">
+        <input id="adminPass" type="password" autocomplete="current-password">
+        <button type="button" class="pass-eye" id="adminEye" title="Parolu göstər" tabindex="-1">👁</button>
+      </div>
+    </div>
+    <div class="err" id="adminError"></div>
+    <button class="btn btn-primary" id="adminSubmit" type="submit">Daxil ol</button>
+  </form>
+</dialog>
+
+<dialog id="licensesDialog" class="wide">
+  <div class="dlg-head"><h3>🔑 Lisenziyalar</h3><button class="dlg-x" id="licensesClose" type="button">✕</button></div>
+  <div class="dlg-body">
+    <form class="add-license" id="newLicenseForm" autocomplete="off" novalidate>
+      <input id="newLicenseNote" type="text" maxlength="80" placeholder="Kimin üçündür (ad və ya e-poçt)">
+      <select id="newLicenseDays" title="Müddət">
+        <option value="0">Müddətsiz</option>
+        <option value="30">1 ay</option>
+        <option value="90">3 ay</option>
+        <option value="180">6 ay</option>
+        <option value="365">1 il</option>
+      </select>
+      <button class="btn btn-primary" id="newLicenseButton" type="submit">➕ Açar yarat</button>
+    </form>
+    <div class="new-key hidden" id="newKeyBox">
+      <code id="newKeyText"></code>
+      <span class="row-actions">
+        <button class="btn btn-line btn-sm" id="newKeyCopy" type="button">📋 Kopyala</button>
+        <button class="btn btn-line btn-sm" id="newKeyMail" type="button" title="E-poçtla göndərmək üçün hazır mətn">✉ Məktub mətni</button>
+      </span>
+    </div>
+    <div class="err" id="licensesMsg"></div>
+    <div class="lic-tools">
+      <input id="licenseSearch" type="text" placeholder="Axtar: açar, ad və ya kompüter">
+      <span class="muted" id="licenseCount"></span>
+    </div>
+    <div class="users-wrap">
+      <table class="users-table">
+        <thead><tr><th>Açar</th><th>Kimin üçün</th><th>Status</th><th>Kompüter</th><th>Bitmə</th><th></th></tr></thead>
+        <tbody id="licensesBody"></tbody>
+      </table>
+    </div>
+    <p class="hint" style="margin-top:.8rem">Açar ilk daxil edildiyi kompüterə bağlanır. İstifadəçi kompüterini dəyişsə, "Sıfırla" bas:
+      açar növbəti kompüterdə yenidən aktivləşə bilər. Bloklanan və ya silinən açar açıq proqramda ən gec 15 dəqiqəyə bağlanır.</p>
+  </div>
+</dialog>
+
+<dialog id="finishDialog">
+  <div class="dlg-head"><h3>İmtahanı bitirmək istəyirsən?</h3></div>
+  <div class="dlg-body">
+    <div class="hint" id="finishInfo"></div>
+    <div class="dlg-actions">
+      <button class="btn btn-line" id="finishCancel" type="button">Davam et</button>
+      <button class="btn btn-primary" id="finishConfirm" type="button">Bitir</button>
+    </div>
+  </div>
+</dialog>
+
+<section id="examView" class="view hidden">
+  <header class="topbar exam-top">
+    <div class="brand"><div class="logo">🎓</div><div><h1 id="examTitle">İmtahan</h1><p id="examProgressText"></p></div></div>
+    <div class="timer" id="examTimer">00:00</div>
+    <div class="actions"><button class="btn btn-light" id="finishExamButton" type="button">✓ <span class="t">İmtahanı bitir</span></button></div>
+  </header>
+  <div class="exam-layout">
+    <main class="exam-main scroller" id="examScroll">
+      <div class="question-card" id="examQuestion"></div>
+      <div class="exam-actions">
+        <button class="btn btn-line" id="prevButton" type="button">← Əvvəlki</button>
+        <div class="grp">
+          <button class="btn btn-line btn-flag" id="flagButton" type="button">🚩 İşarələ</button>
+          <button class="btn btn-line" id="nextButton" type="button">Növbəti →</button>
+        </div>
+      </div>
+    </main>
+    <div class="exam-side-col">
+      <aside class="card exam-side">
+        <h3>Suallar</h3>
+        <div class="qgrid" id="qGrid"></div>
+        <div class="legend"><span>🟦 cavablandı</span><span>🟧 işarəli</span></div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section id="resultView" class="view hidden">
+  <header class="topbar">
+    <div class="brand"><div class="logo">🏁</div><div><h1>İmtahan nəticəsi</h1><p id="resultSubject"></p></div></div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="retryButton" type="button">🔁<span class="t"> Yenidən</span></button>
+      <button class="btn btn-light" id="backButton" type="button">←<span class="t"> Quiz Viewer-ə qayıt</span></button>
+    </div>
+  </header>
+  <div class="result-scroll scroller" id="resultScroll">
+  <div class="result-wrap">
+    <div class="card score-card" id="scoreCard"></div>
+    <div class="card review-bar">
+      <strong>Cavabların təhlili</strong>
+      <div class="seg"><button id="revAll" class="on" type="button">Hamısı</button><button id="revBad" type="button">Səhv və boşlar</button></div>
+    </div>
+    <div id="reviewList" class="question-list"></div>
+  </div>
+  </div>
+</section>
+
+<script>
+    const API_BASE = window.location.origin.startsWith("http")
+      ? window.location.origin
+      : "http://127.0.0.1:8001";
+
+    const state = {
+      subjects: [],
+      currentSubjectId: null,
+      datasets: new Map()
+    };
+
+    const subjectSelect = document.getElementById("subjectSelect");
+    const searchInput = document.getElementById("searchInput");
+    const questionNumberInput = document.getElementById("questionNumberInput");
+    const correctOnlyInput = document.getElementById("correctOnly");
+    const showAnswersInput = document.getElementById("showAnswers");
+    const pdfUploadInput = document.getElementById("pdfUploadInput");
+    const outputDirInput = document.getElementById("outputDirInput");
+    const uploadButton = document.getElementById("uploadButton");
+    const jobStatus = document.getElementById("jobStatus");
+    const statsBox = document.getElementById("statsBox");
+    const subjectTitle = document.getElementById("subjectTitle");
+    const subjectMeta = document.getElementById("subjectMeta");
+    const questionList = document.getElementById("questionList");
+    let pollTimer = null;
+
+    function decodePossiblyBrokenText(value) {
+      if (typeof value !== "string") return "";
+      if (!/[ÃÄÅÉ]/.test(value)) return value;
+      try {
+        const bytes = Uint8Array.from([...value].map(char => char.charCodeAt(0) & 255));
+        return new TextDecoder("utf-8").decode(bytes);
+      } catch {
+        return value;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function normalizeQuestion(question) {
+      return {
+        ...question,
+        text: decodePossiblyBrokenText(question.text),
+        images: (question.images || []).filter(Boolean),
+        options: (question.options || []).map(option => ({
+          ...option,
+          text: decodePossiblyBrokenText(option.text),
+          images: (option.images || []).filter(Boolean)
+        }))
+      };
+    }
+
+    async function loadSubject(subject) {
+      if (!state.datasets.has(subject.id)) {
+        const response = await fetch(`${API_BASE}/exams/${subject.id}`);
+        if (!response.ok) {
+          throw new Error(`JSON yüklənmədi: ${subject.id}`);
+        }
+        const data = await response.json();
+        data.questions = (data.questions || []).map(normalizeQuestion);
+        state.datasets.set(subject.id, data);
+      }
+      return state.datasets.get(subject.id);
+    }
+
+    function buildOptionHtml(option) {
+      const highlight = showAnswersInput.checked && option.is_correct;
+      const imageHtml = option.images.map(src => `<img src="${src}" alt="${option.key} variant şəkli">`).join("");
+      return `
+        <div class="option ${highlight ? "correct" : ""}">
+          <div class="option-head">
+            <span class="badge">${option.key}</span>
+            <span>${escapeHtml(option.text || "Şəkilli variant")}</span>
+          </div>
+          ${highlight ? `<div class="correct-note">✓ Doğru cavab</div>` : ""}
+          ${imageHtml ? `<div class="image-group">${imageHtml}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function buildQuestionHtml(question) {
+      const questionImages = question.images.map(src => `<img src="${src}" alt="Sual şəkli">`).join("");
+      return `
+        <article class="question-card">
+          <div class="question-meta">
+            <span class="qnum">Sual ${question.number}</span>
+            <span class="qpage">Səhifə ${question.page_start}</span>
+          </div>
+          <div class="question-text">${escapeHtml(question.text || "Şəkilli sual")}</div>
+          ${questionImages ? `<div class="image-group">${questionImages}</div>` : ""}
+          <div class="options">
+            ${question.options.map(buildOptionHtml).join("")}
+          </div>
+        </article>
+      `;
+    }
+
+    function getFilteredQuestions(data) {
+      const search = searchInput.value.trim().toLocaleLowerCase("az");
+      const numberFilter = questionNumberInput.value.trim();
+
+      return data.questions.filter(question => {
+        if (numberFilter && String(question.number) !== numberFilter) {
+          return false;
+        }
+
+        if (search) {
+          const haystack = [
+            question.text,
+            ...question.options.map(option => option.text)
+          ].join(" ").toLocaleLowerCase("az");
+
+          if (!haystack.includes(search)) {
+            return false;
+          }
+        }
+
+        return true;
+      }).map(question => {
+        if (!correctOnlyInput.checked) {
+          return question;
+        }
+        return {
+          ...question,
+          options: question.options.filter(option => option.is_correct)
+        };
+      });
+    }
+
+    async function render() {
+      const subject = state.subjects.find(item => item.id === state.currentSubjectId);
+      if (!subject) {
+        subjectTitle.textContent = "İmtahan tapılmadı";
+        subjectMeta.textContent = "Siyahıda imtahan yoxdur";
+        questionList.innerHTML = `<div class="empty">API üzərindən heç bir imtahan tapılmadı.</div>`;
+        statsBox.textContent = "İmtahan siyahısı boşdur.";
+        return;
+      }
+
+      subjectTitle.textContent = subject.title;
+      subjectMeta.textContent = "Məlumat yüklənir...";
+      questionList.innerHTML = `<div class="empty">Fənn məlumatı yüklənir...</div>`;
+
+      try {
+        const data = await loadSubject(subject);
+        const filtered = getFilteredQuestions(data);
+
+        subjectMeta.innerHTML = `<span class="chips"><span class="chip">${data.question_count} sual</span><span class="chip">Filtr: ${filtered.length}</span></span>`;
+        statsBox.innerHTML = `
+          <strong>${escapeHtml(subject.title)}</strong><br>
+          Cəmi sual: ${data.question_count}<br>
+          Filtrdən sonra: ${filtered.length}<br>
+          Mənbə: ${escapeHtml(data.source_pdf)}
+        `;
+
+        if (!filtered.length) {
+          questionList.innerHTML = `<div class="empty">Bu filtrə uyğun sual tapılmadı.</div>`;
+          return;
+        }
+
+        questionList.innerHTML = filtered.map(buildQuestionHtml).join("");
+      } catch (error) {
+        subjectMeta.textContent = "Xəta baş verdi";
+        statsBox.textContent = "JSON faylını oxumaq olmadı.";
+        questionList.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    function populateSubjects() {
+      subjectSelect.innerHTML = state.subjects
+        .map(subject => `<option value="${subject.id}">${escapeHtml(subject.title)}</option>`)
+        .join("");
+      subjectSelect.value = state.currentSubjectId ?? "";
+    }
+
+    async function loadSubjects() {
+      const response = await fetch(`${API_BASE}/exams`);
+      if (!response.ok) {
+        throw new Error("İmtahan siyahısı yüklənmədi.");
+      }
+
+      const subjects = await response.json();
+      state.subjects = subjects.map(subject => ({
+        ...subject,
+        title: decodePossiblyBrokenText(subject.title)
+      }));
+      state.currentSubjectId = state.subjects[0]?.id ?? null;
+      populateSubjects();
+    }
+
+    async function refreshSubjects() {
+      const previous = state.currentSubjectId;
+      state.datasets.clear();
+      await loadSubjects();
+      if (previous && state.subjects.some(subject => subject.id === previous)) {
+        state.currentSubjectId = previous;
+      }
+      populateSubjects();
+      await render();
+    }
+
+    function setJobStatus(message) {
+      jobStatus.textContent = message;
+    }
+
+    async function pollJob(jobId) {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/jobs/${jobId}`);
+        if (!response.ok) {
+          throw new Error("Job status oxunmadı.");
+        }
+
+        const job = await response.json();
+        const lines = [
+          `Job ID: ${job.id}`,
+          `Status: ${job.status}`,
+          job.question_count ? `Sual sayı: ${job.question_count}` : "",
+          job.error ? `Xəta: ${job.error}` : ""
+        ].filter(Boolean);
+        setJobStatus(lines.join("\n"));
+
+        if (job.status === "completed") {
+          uploadButton.disabled = false;
+          await refreshSubjects();
+          if (state.subjects.length) {
+            state.currentSubjectId = state.subjects[0].id;
+            populateSubjects();
+            await render();
+          }
+          document.getElementById("afterParseExam").classList.remove("hidden");
+          return;
+        }
+
+        if (job.status === "failed") {
+          uploadButton.disabled = false;
+          return;
+        }
+
+        pollTimer = setTimeout(() => pollJob(jobId), 2000);
+      } catch (error) {
+        uploadButton.disabled = false;
+        setJobStatus(`Job izlənmədi: ${error.message}`);
+      }
+    }
+
+    async function startUpload() {
+      const file = pdfUploadInput.files?.[0];
+      const outputDir = outputDirInput.value.trim();
+
+      if (!file) {
+        setJobStatus("Əvvəl PDF seç.");
+        return;
+      }
+
+      if (!outputDir) {
+        setJobStatus("Output qovluğunu yaz.");
+        return;
+      }
+
+      uploadButton.disabled = true;
+      document.getElementById("afterParseExam").classList.add("hidden");
+      setJobStatus("PDF göndərilir...");
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("output_dir", outputDir);
+      formData.append("filename", file.name);
+
+      try {
+        const response = await fetch(`${API_BASE}/jobs/parse-upload`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || "Upload alınmadı.");
+        }
+
+        const job = await response.json();
+        setJobStatus(`Job yaradıldı.\nJob ID: ${job.id}\nStatus: ${job.status}`);
+        pollJob(job.id);
+      } catch (error) {
+        uploadButton.disabled = false;
+        setJobStatus(`Upload xətası: ${error.message}`);
+      }
+    }
+
+    subjectSelect.addEventListener("change", () => {
+      state.currentSubjectId = subjectSelect.value;
+      render();
+    });
+
+    searchInput.addEventListener("input", render);
+    questionNumberInput.addEventListener("input", render);
+    correctOnlyInput.addEventListener("change", render);
+    showAnswersInput.addEventListener("change", render);
+    uploadButton.addEventListener("click", startUpload);
+
+    // Məlumat yalnız login uğurlu olandan sonra yüklənir (aşağıdakı Firebase modulu çağırır)
+    let appStarted = false;
+    function startApp() {
+      document.body.classList.remove("locked");
+      queueFitSidebar();
+      if (appStarted) return;
+      appStarted = true;
+      loadSubjects()
+        .then(render)
+        .catch(error => {
+          subjectTitle.textContent = "Xəta baş verdi";
+          subjectMeta.textContent = "İmtahan siyahısı yüklənmədi";
+          statsBox.textContent = "API ilə bağlantı qurulmadı.";
+          questionList.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+        });
+    }
+    window.startApp = startApp;
+
+    // ---- UI extras ----
+    const uploadDialog = document.getElementById("uploadDialog");
+    document.getElementById("openUploadButton").addEventListener("click", () => uploadDialog.showModal());
+    document.getElementById("closeUploadButton").addEventListener("click", () => uploadDialog.close());
+    pdfUploadInput.addEventListener("change", () => {
+      document.getElementById("fileName").textContent = pdfUploadInput.files?.[0]?.name || "PDF faylı seçmək üçün kliklə";
+    });
+
+    const themeButton = document.getElementById("themeButton");
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      themeButton.firstChild.textContent = theme === "dark" ? "☀️" : "🌙";
+    }
+    let savedTheme = "light";
+    try { savedTheme = localStorage.getItem("theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch {}
+    applyTheme(savedTheme);
+    themeButton.addEventListener("click", () => {
+      const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      applyTheme(next);
+      try { localStorage.setItem("theme", next); } catch {}
+    });
+
+    // Sürüşmə artıq pəncərədə yox, hər görünüşün öz sahəsindədir (sol menyu yerində qalır)
+    const toTop = document.getElementById("toTop");
+    const scrollers = [...document.querySelectorAll(".scroller")];
+    function activeScroller() {
+      return scrollers.find(el => el.offsetParent !== null) || null;
+    }
+    function updateToTop() {
+      const sc = activeScroller();
+      toTop.classList.toggle("show", !!sc && sc.scrollTop > 500);
+    }
+    scrollers.forEach(el => el.addEventListener("scroll", updateToTop, { passive: true }));
+    toTop.addEventListener("click", () => activeScroller()?.scrollTo({ top: 0, behavior: "smooth" }));
+
+    // Sol menyu hər ekranda tam sığsın: lazım olsa avtomatik kiçildilir, öz scroll-u olmur
+    const sidebarEl = document.getElementById("sidebar");
+    const sidebarInner = document.getElementById("sidebarInner");
+    const SIDEBAR_MIN_ZOOM = 0.62;
+    function fitSidebar() {
+      if (!sidebarEl.offsetParent) return;           // görünüş gizlidirsə ölçmə
+      const cs = getComputedStyle(sidebarEl);
+      const avail = sidebarEl.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if (avail <= 0) return;
+      sidebarInner.style.zoom = "1";
+      const need = sidebarInner.getBoundingClientRect().height;
+      const z = need > avail ? Math.floor((avail / need) * 1000) / 1000 : 1;
+      sidebarEl.classList.toggle("scroll", z < SIDEBAR_MIN_ZOOM);  // yalnız çox kiçik pəncərədə ehtiyat
+      sidebarInner.style.zoom = String(Math.max(z, SIDEBAR_MIN_ZOOM));
+    }
+    let fitQueued = false;
+    function queueFitSidebar() {
+      if (fitQueued) return;
+      fitQueued = true;
+      requestAnimationFrame(() => { fitQueued = false; fitSidebar(); });
+    }
+    window.addEventListener("resize", queueFitSidebar);
+    new MutationObserver(queueFitSidebar).observe(sidebarInner, { childList: true, subtree: true, characterData: true });
+    if (document.fonts?.ready) document.fonts.ready.then(queueFitSidebar);
+    queueFitSidebar();
+
+    // ================= EXAM MODE =================
+    const $ = id => document.getElementById(id);
+    const examDialog = $("examDialog"), finishDialog = $("finishDialog");
+    const examSubject = $("examSubject"), examFrom = $("examFrom"), examTo = $("examTo");
+    const examCount = $("examCount"), examMinutes = $("examMinutes");
+    const examInfo = $("examInfo"), examError = $("examError");
+    let exam = null;
+
+    function setView(name) {
+      $("viewerView").classList.toggle("hidden", name !== "viewer");
+      $("examView").classList.toggle("hidden", name !== "exam");
+      $("resultView").classList.toggle("hidden", name !== "result");
+      scrollers.forEach(el => { el.scrollTop = 0; });
+      updateToTop();
+      if (name === "viewer") queueFitSidebar();
+    }
+
+    // İmtahanda cavabların yeri hər dəfə təsadüfi olur. Hərflər (A, B, C...) yeni sıraya görə verilir,
+    // düzgün cavab is_correct ilə işarəli qalır. Əsas suallara toxunulmur (surət yaradılır).
+    const OPTION_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    function shuffleOptions(question) {
+      const options = shuffle(question.options || []).map((option, index) => ({
+        ...option,
+        originalKey: option.key,
+        key: OPTION_LETTERS[index] || String(index + 1)
+      }));
+      return { ...question, options };
+    }
+
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function fmtTime(ms) {
+      const t = Math.max(0, Math.ceil(ms / 1000));
+      const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+      const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+      return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    function examPool(data) {
+      const from = Number(examFrom.value), to = Number(examTo.value);
+      return data.questions.filter(q => q.number >= from && q.number <= to && q.options.length > 0);
+    }
+
+    async function updateExamInfo() {
+      const subject = state.subjects.find(s => s.id === examSubject.value);
+      if (!subject) return;
+      const data = await loadSubject(subject);
+      examInfo.textContent = `Bu aralıqda ${examPool(data).length} sual var (fənn üzrə cəmi ${data.questions.length}). Suallar bu aralıqdan təsadüfi seçiləcək.`;
+    }
+
+    async function onExamSubjectChange() {
+      examError.textContent = "";
+      const subject = state.subjects.find(s => s.id === examSubject.value);
+      if (!subject) return;
+      try {
+        const data = await loadSubject(subject);
+        const nums = data.questions.map(q => q.number);
+        examFrom.value = nums.length ? Math.min(...nums) : 1;
+        examTo.value = nums.length ? Math.max(...nums) : 1;
+        examCount.value = Math.min(Number(examCount.value) || 25, data.questions.length || 1);
+        await updateExamInfo();
+      } catch (e) {
+        examError.textContent = e.message;
+      }
+    }
+
+    async function openExamSetup() {
+      uploadDialog.close();
+      if (!state.subjects.length) {
+        uploadDialog.showModal();
+        setJobStatus("İmtahan üçün əvvəl PDF əlavə edib parse et.");
+        return;
+      }
+      examSubject.innerHTML = state.subjects
+        .map(s => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join("");
+      examSubject.value = state.currentSubjectId ?? state.subjects[0].id;
+      try {
+        const m = localStorage.getItem("examMinutes");
+        if (m) examMinutes.value = m;
+      } catch {}
+      examDialog.showModal();
+      await onExamSubjectChange();
+    }
+
+    async function startExam() {
+      examError.textContent = "";
+      const subject = state.subjects.find(s => s.id === examSubject.value);
+      const from = Number(examFrom.value), to = Number(examTo.value);
+      let count = Math.floor(Number(examCount.value));
+      const minutes = Number(examMinutes.value);
+      if (!subject) { examError.textContent = "Fənn seçilməyib."; return; }
+      if (!from || !to || from > to) { examError.textContent = "Sual aralığı düzgün deyil."; return; }
+      if (!count || count < 1) { examError.textContent = "Sual sayı ən azı 1 olmalıdır."; return; }
+      if (!minutes || minutes <= 0) { examError.textContent = "Vaxt ən azı 1 dəqiqə olmalıdır."; return; }
+
+      const data = await loadSubject(subject);
+      const pool = examPool(data);
+      if (!pool.length) { examError.textContent = "Bu aralıqda sual tapılmadı."; return; }
+      count = Math.min(count, pool.length);
+
+      try { localStorage.setItem("examMinutes", String(minutes)); } catch {}
+
+      const now = Date.now();
+      exam = {
+        subject, from, to, minutes,
+        qs: shuffle(pool).slice(0, count).map(shuffleOptions),
+        answers: {}, flags: new Set(), cur: 0,
+        startedAt: now, endAt: now + minutes * 60000,
+        timerId: null, finished: false
+      };
+      examDialog.close();
+      $("examTitle").textContent = subject.title;
+      setView("exam");
+      renderExam();
+      tickTimer();
+      exam.timerId = setInterval(tickTimer, 500);
+      window.onbeforeunload = () => "İmtahan davam edir.";
+    }
+
+    function tickTimer() {
+      if (!exam || exam.finished) return;
+      const left = exam.endAt - Date.now();
+      const el = $("examTimer");
+      el.textContent = fmtTime(left);
+      el.classList.toggle("warn", left <= 60000);
+      el.classList.toggle("low", left > 60000 && left <= 300000);
+      if (left <= 0) finishExam();
+    }
+
+    function optionImages(option) {
+      return (option.images || []).map(src => `<img src="${src}" alt="${option.key}">`).join("");
+    }
+
+    function renderExam() {
+      const q = exam.qs[exam.cur];
+      const sel = exam.answers[exam.cur];
+      const answered = Object.keys(exam.answers).length;
+      $("examProgressText").textContent = `Sual ${exam.cur + 1} / ${exam.qs.length} · Cavablandı: ${answered}`;
+
+      const qImgs = (q.images || []).map(src => `<img src="${src}" alt="Sual şəkli">`).join("");
+      $("examQuestion").innerHTML = `
+        <div class="question-meta">
+          <span class="qnum">Sual ${exam.cur + 1}</span>
+          <span class="qpage">PDF-də №${q.number}</span>
+        </div>
+        <div class="question-text">${escapeHtml(q.text || "Şəkilli sual")}</div>
+        ${qImgs ? `<div class="image-group">${qImgs}</div>` : ""}
+        <div class="options exam-options">
+          ${q.options.map(o => `
+            <button type="button" class="opt ${sel === o.key ? "selected" : ""}" data-key="${o.key}">
+              <span class="badge">${o.key}</span>
+              <span class="opt-body"><span>${escapeHtml(o.text || (o.images.length ? "" : "Şəkilli variant"))}</span>${optionImages(o)}</span>
+            </button>`).join("")}
+        </div>`;
+
+      $("prevButton").disabled = exam.cur === 0;
+      $("nextButton").disabled = exam.cur === exam.qs.length - 1;
+      $("flagButton").classList.toggle("on", exam.flags.has(exam.cur));
+      $("flagButton").textContent = exam.flags.has(exam.cur) ? "🚩 İşarə götür" : "🚩 İşarələ";
+
+      $("qGrid").innerHTML = exam.qs.map((_, i) => {
+        const cls = ["qb"];
+        if (exam.answers[i]) cls.push("answered");
+        if (exam.flags.has(i)) cls.push("flagged");
+        if (i === exam.cur) cls.push("current");
+        return `<button type="button" class="${cls.join(" ")}" data-i="${i}">${i + 1}</button>`;
+      }).join("");
+      $("qGrid").querySelector(".qb.current")?.scrollIntoView({ block: "nearest" });
+    }
+
+    function goTo(i) {
+      if (!exam || i < 0 || i >= exam.qs.length) return;
+      exam.cur = i;
+      renderExam();
+      $("examScroll").scrollTop = 0;
+    }
+
+    function pickOption(key) {
+      if (!exam) return;
+      if (exam.answers[exam.cur] === key) delete exam.answers[exam.cur];
+      else exam.answers[exam.cur] = key;
+      renderExam();
+    }
+
+    function openFinishDialog() {
+      const total = exam.qs.length;
+      const answered = Object.keys(exam.answers).length;
+      const flagged = exam.flags.size;
+      $("finishInfo").textContent =
+        `Cavablandırılıb: ${answered} / ${total}. Boş qalıb: ${total - answered}.` +
+        (flagged ? ` İşarələnmiş: ${flagged}.` : "") +
+        ` Qalan vaxt: ${fmtTime(exam.endAt - Date.now())}.`;
+      finishDialog.showModal();
+    }
+
+    function finishExam() {
+      if (!exam || exam.finished) return;
+      exam.finished = true;
+      clearInterval(exam.timerId);
+      window.onbeforeunload = null;
+      finishDialog.close();
+      exam.usedMs = Math.min(Date.now(), exam.endAt) - exam.startedAt;
+      showResult();
+    }
+
+    let reviewItems = [];
+    function showResult() {
+      reviewItems = exam.qs.map((q, i) => {
+        const chosen = exam.answers[i];
+        const correctKeys = q.options.filter(o => o.is_correct).map(o => o.key);
+        let status;
+        if (!correctKeys.length) status = "nokey";
+        else if (!chosen) status = "blank";
+        else status = correctKeys.includes(chosen) ? "ok" : "bad";
+        return { q, i, chosen, correctKeys, status };
+      });
+      const cnt = st => reviewItems.filter(r => r.status === st).length;
+      const ok = cnt("ok"), bad = cnt("bad"), blank = cnt("blank"), nokey = cnt("nokey");
+      const scorable = reviewItems.length - nokey;
+      const pct = scorable ? Math.round(ok / scorable * 100) : 0;
+
+      $("resultSubject").textContent = exam.subject.title;
+      $("scoreCard").innerHTML = `
+        <div class="ring" style="--p:${pct}"><div>${pct}%</div></div>
+        <div class="score-info">
+          <h2>${ok} / ${scorable} düzgün cavab</h2>
+          <div class="chips">
+            <span class="chip ok">✓ Düzgün: ${ok}</span>
+            <span class="chip bad">✗ Səhv: ${bad}</span>
+            <span class="chip gray">○ Boş: ${blank}</span>
+            ${nokey ? `<span class="chip gray">Cavab açarı yoxdur: ${nokey}</span>` : ""}
+            <span class="chip">⏱ ${fmtTime(exam.usedMs)} / ${exam.minutes} dəq</span>
+          </div>
+        </div>`;
+      $("revAll").classList.add("on");
+      $("revBad").classList.remove("on");
+      renderReview(false);
+      setView("result");
+    }
+
+    function renderReview(onlyBad) {
+      const items = reviewItems.filter(r => !onlyBad || r.status === "bad" || r.status === "blank");
+      if (!items.length) {
+        $("reviewList").innerHTML = `<div class="empty">Göstəriləcək sual yoxdur. 🎉</div>`;
+        return;
+      }
+      $("reviewList").innerHTML = items.map(r => {
+        const q = r.q;
+        const qImgs = (q.images || []).map(src => `<img src="${src}" alt="Sual şəkli">`).join("");
+        const opts = q.options.map(o => {
+          const isCorrect = o.is_correct, isChosen = r.chosen === o.key;
+          let cls = "option", note = "";
+          if (isCorrect) { cls += " correct"; note = `<div class="correct-note">✓ ${isChosen ? "Sənin cavabın (doğru)" : "Doğru cavab"}</div>`; }
+          else if (isChosen) { cls += " wrong"; note = `<div class="wrong-note">✗ Sənin cavabın</div>`; }
+          const imgs = optionImages(o);
+          return `<div class="${cls}">
+            <div class="option-head"><span class="badge">${o.key}</span><span>${escapeHtml(o.text || (imgs ? "" : "Şəkilli variant"))}</span></div>
+            ${note}${imgs ? `<div class="image-group">${imgs}</div>` : ""}</div>`;
+        }).join("");
+        const tag = { ok: "✓ Düzgün", bad: "✗ Səhv", blank: "○ Boş", nokey: "Cavab açarı yoxdur" }[r.status];
+        const tagCls = { ok: "ok", bad: "bad", blank: "gray", nokey: "gray" }[r.status];
+        return `<article class="question-card">
+          <div class="question-meta"><span class="qnum">Sual ${r.i + 1}</span><span class="chip ${tagCls}">${tag}</span></div>
+          <div class="question-text">${escapeHtml(q.text || "Şəkilli sual")}</div>
+          ${qImgs ? `<div class="image-group">${qImgs}</div>` : ""}
+          <div class="options">${opts}</div></article>`;
+      }).join("");
+    }
+
+    function backToViewer() {
+      exam = null;
+      window.onbeforeunload = null;
+      setView("viewer");
+    }
+
+    // events
+    $("sideExamButton").addEventListener("click", openExamSetup);
+    $("topExamButton").addEventListener("click", openExamSetup);
+    $("afterParseExam").addEventListener("click", openExamSetup);
+    $("examCloseButton").addEventListener("click", () => examDialog.close());
+    $("examCancelButton").addEventListener("click", () => examDialog.close());
+    $("examStartButton").addEventListener("click", startExam);
+    examSubject.addEventListener("change", onExamSubjectChange);
+    examFrom.addEventListener("input", updateExamInfo);
+    examTo.addEventListener("input", updateExamInfo);
+
+    $("examQuestion").addEventListener("click", e => {
+      const btn = e.target.closest(".opt");
+      if (btn) pickOption(btn.dataset.key);
+    });
+    $("qGrid").addEventListener("click", e => {
+      const btn = e.target.closest(".qb");
+      if (btn) goTo(Number(btn.dataset.i));
+    });
+    $("prevButton").addEventListener("click", () => goTo(exam.cur - 1));
+    $("nextButton").addEventListener("click", () => goTo(exam.cur + 1));
+    $("flagButton").addEventListener("click", () => {
+      if (exam.flags.has(exam.cur)) exam.flags.delete(exam.cur); else exam.flags.add(exam.cur);
+      renderExam();
+    });
+    $("finishExamButton").addEventListener("click", openFinishDialog);
+    $("finishCancel").addEventListener("click", () => finishDialog.close());
+    $("finishConfirm").addEventListener("click", finishExam);
+    $("backButton").addEventListener("click", backToViewer);
+    $("retryButton").addEventListener("click", () => { backToViewer(); openExamSetup(); });
+    $("revAll").addEventListener("click", () => { $("revAll").classList.add("on"); $("revBad").classList.remove("on"); renderReview(false); });
+    $("revBad").addEventListener("click", () => { $("revBad").classList.add("on"); $("revAll").classList.remove("on"); renderReview(true); });
+
+    document.addEventListener("keydown", e => {
+      if (!exam || exam.finished || finishDialog.open) return;
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+      if (e.key === "ArrowRight") goTo(exam.cur + 1);
+      else if (e.key === "ArrowLeft") goTo(exam.cur - 1);
+      else {
+        const k = e.key.toUpperCase();
+        const idx = "12345".indexOf(k);
+        const key = idx >= 0 ? String.fromCharCode(65 + idx) : k;
+        if (exam.qs[exam.cur].options.some(o => o.key === key)) pickOption(key);
+      }
+    });
+  </script>
+
+<script type="module">
+// ================= LİSENZİYA + ADMIN =================
+// Lisenziya proqramın Python hissəsində yoxlanılır (license_guard.py) və Firebase ayarları da oradadır.
+// Bu səhifə ayarları /app-config ünvanından alır. Adi istifadəçi üçün Firebase SDK ümumiyyətlə yüklənmir.
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/13.2.0";
+const KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // license_guard.py ilə eyni
+const RECHECK_MS = 15 * 60 * 1000;                           // açıq proqramda lisenziya yoxlaması
+
+const byId = id => document.getElementById(id);
+const el = {
+  screen: byId("licenseScreen"), form: byId("licenseForm"), key: byId("licenseKey"),
+  error: byId("licenseError"), button: byId("licenseButton"), cornerAdmin: byId("cornerAdmin"),
+  adminButton: byId("adminButton"), licensesButton: byId("licensesButton"), adminLogout: byId("adminLogout"),
+  adminDialog: byId("adminDialog"), adminClose: byId("adminClose"), adminForm: byId("adminForm"),
+  adminEmail: byId("adminEmail"), adminPass: byId("adminPass"), adminEye: byId("adminEye"),
+  adminError: byId("adminError"), adminSubmit: byId("adminSubmit"),
+  licDialog: byId("licensesDialog"), licClose: byId("licensesClose"), newForm: byId("newLicenseForm"),
+  newNote: byId("newLicenseNote"), newDays: byId("newLicenseDays"), newButton: byId("newLicenseButton"),
+  newKeyBox: byId("newKeyBox"), newKeyText: byId("newKeyText"), newKeyCopy: byId("newKeyCopy"),
+  licMsg: byId("licensesMsg"), search: byId("licenseSearch"), count: byId("licenseCount"), licBody: byId("licensesBody"),
+  newKeyMail: byId("newKeyMail"),
+  buy: byId("licenseBuy"), planList: byId("planList"), buyAmount: byId("buyAmount"), buyCard: byId("buyCard"),
+  buyEmail: byId("buyEmail"), copyCard: byId("copyCard"), copyEmail: byId("copyEmail"),
+  mailGmail: byId("mailGmail"), mailApp: byId("mailApp"), buyMsg: byId("buyMsg")
+};
+
+let appConfig = null;           // { firebase, adminEmail, licenseCollection }
+let fb = null, auth = null, db = null;
+let isAdmin = false;
+let licenses = [];
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, { headers: { "Content-Type": "application/json" }, ...options });
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw Object.assign(new Error(data.detail || `HTTP ${res.status}`), { status: res.status, data });
+  return data;
+}
+const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body || {}) });
+
+function reloadWithMessage(message) {
+  try { if (message) sessionStorage.setItem("licenseMessage", message); } catch {}
+  window.onbeforeunload = null;
+  location.reload();
+}
+
+// ---------- lisenziya ekranı ----------
+const formatKey = value => value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20).replace(/(.{5})(?=.)/g, "$1-");
+
+function showLicenseScreen(message) {
+  document.body.classList.add("locked");
+  el.screen.classList.remove("hidden", "checking");
+  el.error.textContent = message || "";
+  el.button.disabled = false;
+  el.key.focus();
+  loadSales();
+}
+
+// ---------- lisenziya almaq (tariflər license_guard.py → SALES) ----------
+let sales = null;
+let selectedPlan = null;
+const money = (value, currency) => `${Number(value).toFixed(2)} ${currency || ""}`.trim();
+const monthsOf = plan => Math.max(1, Math.round(plan.days / 30));
+
+async function loadSales() {
+  try {
+    appConfig = appConfig || await api("/app-config");
+    sales = appConfig.sales;
+  } catch {
+    sales = null;
+  }
+  if (!sales || !Array.isArray(sales.plans) || !sales.plans.length) {
+    el.buy.classList.add("hidden");
+    return;
+  }
+  const best = sales.plans.reduce((a, b) => (b.price / monthsOf(b) < a.price / monthsOf(a) ? b : a));
+  el.planList.innerHTML = sales.plans.map(p => {
+    const months = monthsOf(p);
+    return `<button type="button" class="plan" data-plan="${escapeHtml(p.id)}">
+      ${p.id === best.id && sales.plans.length > 1 ? '<span class="tag">ən sərfəli</span>' : ""}
+      <b>${escapeHtml(p.title)}</b>
+      <span class="price">${escapeHtml(money(p.price, sales.currency))}</span>
+      <small>${months > 1 ? `ayda ${escapeHtml(money(p.price / months, sales.currency))}` : "&nbsp;"}</small>
+    </button>`;
+  }).join("");
+  el.buyCard.textContent = sales.card || "—";
+  el.buyEmail.textContent = sales.email || "—";
+  selectPlan(selectedPlan || sales.plans[0].id);
+}
+
+function selectPlan(id) {
+  const plan = sales.plans.find(p => p.id === id) || sales.plans[0];
+  selectedPlan = plan.id;
+  el.planList.querySelectorAll(".plan").forEach(b => b.classList.toggle("on", b.dataset.plan === plan.id));
+  el.buyAmount.textContent = money(plan.price, sales.currency);
+}
+
+async function openMail(kind) {
+  el.buyMsg.textContent = "";
+  el.buyMsg.classList.remove("ok-msg");
+  try {
+    const res = await post("/sales/open-mail", { kind, plan: selectedPlan });
+    if (res.ok) {
+      el.buyMsg.textContent = "✓ Məktub açıldı. Ödəniş qəbzini (skrinşot) əlavə etməyi unutma.";
+      el.buyMsg.classList.add("ok-msg");
+      return;
+    }
+  } catch {}
+  el.buyMsg.textContent = "Açmaq olmadı. E-poçt ünvanını kopyalayıb məktubu özün yaz.";
+}
+
+function enterApp() {
+  el.screen.classList.add("hidden");
+  window.startApp();
+}
+
+async function onActivate(ev) {
+  ev.preventDefault();
+  const key = formatKey(el.key.value);
+  el.key.value = key;
+  if (key.length !== 23) {
+    el.error.textContent = "Açar 20 simvoldan ibarətdir: XXXXX-XXXXX-XXXXX-XXXXX";
+    return;
+  }
+  el.error.textContent = "";
+  el.button.disabled = true;
+  el.button.textContent = "Yoxlanılır...";
+  try {
+    const st = await post("/license/activate", { key });
+    if (st.licensed) {
+      el.key.value = "";
+      enterApp();
+    } else {
+      el.error.textContent = st.message || "Açar qəbul edilmədi.";
+    }
+  } catch (e) {
+    el.error.textContent = `Xəta: ${e.message}`;
+  } finally {
+    el.button.disabled = false;
+    el.button.textContent = "Aktivləşdir";
+  }
+}
+
+async function boot() {
+  let pending = "";
+  try { pending = sessionStorage.getItem("licenseMessage") || ""; sessionStorage.removeItem("licenseMessage"); } catch {}
+  try {
+    const st = await api("/license/status");
+    if (st.admin) await post("/admin/logout").catch(() => {});   // səhifə yeniləndi — admin yenidən daxil olmalıdır
+    if (st.licensed) return enterApp();
+    showLicenseScreen(pending || st.message);
+  } catch (e) {
+    showLicenseScreen(`Proqramın daxili xidməti cavab vermir: ${e.message}`);
+  }
+}
+
+// proqram açıq olanda da vaxtaşırı yoxlanılır: admin açarı bloklasa və ya silsə, proqram bağlanır
+setInterval(async () => {
+  if (isAdmin || document.body.classList.contains("locked")) return;
+  try {
+    const st = await api("/license/status");
+    if (!st.licensed && !st.admin) reloadWithMessage(st.message || "Lisenziya etibarsızdır.");
+  } catch {}
+}, RECHECK_MS);
+
+// ---------- admin girişi ----------
+async function loadFirebase() {
+  if (fb) return;
+  appConfig = appConfig || await api("/app-config");
+  let mods;
+  try {
+    mods = await Promise.all([
+      import(`${FIREBASE_SDK}/firebase-app.js`),
+      import(`${FIREBASE_SDK}/firebase-auth.js`),
+      import(`${FIREBASE_SDK}/firebase-firestore.js`)
+    ]);
+  } catch {
+    throw Object.assign(new Error("sdk"), { code: "app/sdk" });
+  }
+  const lib = Object.assign({}, ...mods);
+  const app = lib.getApps().length ? lib.getApps()[0] : lib.initializeApp(appConfig.firebase);
+  auth = lib.getAuth(app);
+  await lib.setPersistence(auth, lib.inMemoryPersistence);   // admin hər açılışda yenidən daxil olur
+  db = lib.getFirestore(app);
+  fb = lib;
+}
+
+function errorText(e) {
+  const wrong = "E-poçt və ya parol səhvdir.";
+  const badKey = "Firebase apiKey səhvdir (license_guard.py → FIREBASE_CONFIG).";
+  const map = {
+    "auth/invalid-credential": wrong,
+    "auth/invalid-login-credentials": wrong,
+    "auth/wrong-password": wrong,
+    "auth/user-not-found": wrong,
+    "auth/invalid-email": "E-poçt düzgün deyil.",
+    "auth/missing-password": "Parolu yaz.",
+    "auth/user-disabled": "Bu hesab Firebase-də deaktiv edilib.",
+    "auth/too-many-requests": "Çox sayda uğursuz cəhd. Bir neçə dəqiqə sonra yenidən yoxla.",
+    "auth/network-request-failed": "İnternet bağlantısı yoxdur.",
+    "auth/operation-not-allowed": "Firebase-də Email/Password girişi aktiv edilməyib.",
+    "auth/invalid-api-key": badKey,
+    "auth/api-key-not-valid.-please-pass-a-valid-api-key.": badKey,
+    "app/sdk": "Firebase yüklənmədi. İnternet bağlantısını yoxla.",
+    "app/not-admin": "Bu hesab admin deyil.",
+    "permission-denied": "Firestore icazəsi yoxdur: Rules-a Exam Viewer bloku əlavə edilməyib.",
+    "unavailable": "Firestore-a qoşulmaq olmadı. İnternet bağlantısını yoxla.",
+    "not-found": "Firestore verilənlər bazası tapılmadı."
+  };
+  if (map[e?.code]) return map[e.code];
+  if (e?.status === 403 && e?.data?.detail) return e.data.detail;
+  return e?.message ? `Xəta: ${e.message}` : "Naməlum xəta.";
+}
+
+function openAdmin() {
+  el.adminError.textContent = "";
+  el.adminDialog.showModal();
+  el.adminEmail.focus();
+}
+
+async function onAdminSubmit(ev) {
+  ev.preventDefault();
+  let email = el.adminEmail.value.trim().toLowerCase();
+  const pass = el.adminPass.value;
+  el.adminError.textContent = "";
+  if (!email || !pass) { el.adminError.textContent = "E-poçt və parolu yaz."; return; }
+  el.adminSubmit.disabled = true;
+  el.adminSubmit.textContent = "Yoxlanılır...";
+  try {
+    await loadFirebase();
+    const adminEmail = String(appConfig.adminEmail || "").toLowerCase();
+    if (email === "admin") email = adminEmail;               // "admin" yazmaq da kifayətdir
+    if (email !== adminEmail) throw Object.assign(new Error("not admin"), { code: "app/not-admin" });
+    const cred = await fb.signInWithEmailAndPassword(auth, email, pass);
+    await post("/admin/session", { idToken: await cred.user.getIdToken() });   // Python tərəfi də yoxlayır
+    isAdmin = true;
+    el.adminPass.value = "";
+    el.adminDialog.close();
+    el.adminButton.classList.add("hidden");
+    el.licensesButton.classList.remove("hidden");
+    el.adminLogout.classList.remove("hidden");
+    enterApp();
+  } catch (e) {
+    el.adminError.textContent = errorText(e);
+    if (auth) fb.signOut(auth).catch(() => {});
+  } finally {
+    el.adminSubmit.disabled = false;
+    el.adminSubmit.textContent = "Daxil ol";
+  }
+}
+
+async function adminLogout() {
+  try { if (auth) await fb.signOut(auth); } catch {}
+  try { await post("/admin/logout"); } catch {}
+  reloadWithMessage("");
+}
+
+// ---------- admin: lisenziyalar ----------
+const licensesCol = () => (appConfig && appConfig.licenseCollection) || "examviewer_licenses";
+const toDate = v => (v && typeof v.toDate === "function") ? v.toDate() : null;
+function fmtDate(v, withTime = false) {
+  const d = toDate(v);
+  if (!d) return "";
+  return d.toLocaleString("az-AZ", withTime ? { dateStyle: "short", timeStyle: "short" } : { dateStyle: "short" });
+}
+
+function generateKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(20));    // 256 % 32 == 0 → bərabər paylanma
+  return Array.from(bytes, b => KEY_ALPHABET[b % KEY_ALPHABET.length]).join("").replace(/(.{5})(?=.)/g, "$1-");
+}
+
+function licenseState(l) {
+  if (l.active === false) return ["bad", "Bloklu"];
+  const exp = toDate(l.expiresAt);
+  if (exp && exp <= new Date()) return ["bad", "Müddəti bitib"];
+  if (!l.deviceId) return ["warn", "Gözləyir"];
+  return ["ok", "Aktiv"];
+}
+
+function setLicMsg(text, ok = false) {
+  el.licMsg.textContent = text || "";
+  el.licMsg.classList.toggle("ok-msg", ok);
+}
+
+function renderLicenses() {
+  const q = el.search.value.trim().toLowerCase();
+  const rows = licenses.filter(l => !q || [l.id, l.note, l.deviceName].some(v => String(v || "").toLowerCase().includes(q)));
+  const activeCount = licenses.filter(l => licenseState(l)[1] === "Aktiv").length;
+  el.count.textContent = `${licenses.length} açar · ${activeCount} aktiv`;
+  if (!rows.length) {
+    el.licBody.innerHTML = `<tr><td colspan="6" class="users-empty">${licenses.length ? "Axtarışa uyğun açar yoxdur." : "Hələ açar yoxdur. Yuxarıdan yarat."}</td></tr>`;
+    return;
+  }
+  el.licBody.innerHTML = rows.map(l => {
+    const [cls, label] = licenseState(l);
+    const device = l.deviceName
+      ? `${escapeHtml(l.deviceName)}<div class="muted">${escapeHtml(fmtDate(l.lastSeen, true))}</div>`
+      : '<span class="muted">—</span>';
+    return `<tr data-id="${escapeHtml(l.id)}">
+      <td><span class="lic-key">${escapeHtml(l.id)}</span><button type="button" class="icon-btn" data-act="copy" title="Kopyala">📋</button></td>
+      <td>${l.note ? escapeHtml(l.note) : '<span class="muted">—</span>'}</td>
+      <td><span class="chip ${cls}">${label}</span></td>
+      <td>${device}</td>
+      <td class="muted">${escapeHtml(fmtDate(l.expiresAt) || "Müddətsiz")}</td>
+      <td><div class="row-actions">
+        <button type="button" class="btn btn-line btn-sm" data-act="toggle">${l.active === false ? "Aktiv et" : "Blokla"}</button>
+        ${l.deviceId ? '<button type="button" class="btn btn-line btn-sm" data-act="reset" title="Açarı kompüterdən ayır">Sıfırla</button>' : ""}
+        <button type="button" class="btn btn-danger btn-sm" data-act="delete">Sil</button>
+      </div></td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadLicenses() {
+  el.licBody.innerHTML = `<tr><td colspan="6" class="users-empty">Yüklənir...</td></tr>`;
+  try {
+    const snap = await fb.getDocs(fb.collection(db, licensesCol()));
+    licenses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0));
+    renderLicenses();
+  } catch (e) {
+    el.licBody.innerHTML = `<tr><td colspan="6" class="users-empty">${escapeHtml(errorText(e))}</td></tr>`;
+  }
+}
+
+let lastCreated = null;   // { key, title, expires }
+
+function fillDurationSelect() {
+  const plans = appConfig && appConfig.sales && appConfig.sales.plans;
+  if (!plans || el.newDays.dataset.filled) return;
+  const currency = appConfig.sales.currency;
+  el.newDays.innerHTML = plans.map(p => `<option value="${p.days}">${escapeHtml(p.title)} — ${escapeHtml(money(p.price, currency))}</option>`).join("")
+    + '<option value="0">Müddətsiz</option>';
+  el.newDays.dataset.filled = "1";
+}
+
+function licenseMailText() {
+  if (!lastCreated) return "";
+  const d = lastCreated.expires;
+  const pad = n => String(n).padStart(2, "0");
+  const until = d ? ` (bitmə tarixi: ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()})` : "";
+  return [
+    "Salam! Ödənişiniz təsdiqləndi. Exam Viewer lisenziya açarınız:",
+    "",
+    lastCreated.key,
+    "",
+    `Müddət: ${lastCreated.title}${until}`,
+    "Proqramı açın, açarı \"Lisenziya açarı\" xanasına yazın və \"Aktivləşdir\" basın.",
+    "Qeyd: açar yalnız bir kompüterdə işləyir."
+  ].join("\n");
+}
+
+async function onCreateLicense(ev) {
+  ev.preventDefault();
+  const note = el.newNote.value.trim().slice(0, 80);
+  const days = Number(el.newDays.value) || 0;
+  setLicMsg("");
+  el.newButton.disabled = true;
+  try {
+    const key = generateKey();
+    const expires = days ? new Date(Date.now() + days * 86400000) : null;
+    lastCreated = { key, expires, title: el.newDays.selectedOptions[0]?.textContent.split(" — ")[0] || "Müddətsiz" };
+    await fb.setDoc(fb.doc(db, licensesCol(), key), {
+      note,
+      active: true,
+      expiresAt: expires ? fb.Timestamp.fromDate(expires) : null,
+      deviceId: null, deviceName: null, activatedAt: null, lastSeen: null,
+      createdAt: fb.serverTimestamp()
+    });
+    el.newKeyText.textContent = key;
+    el.newKeyBox.classList.remove("hidden");
+    el.newNote.value = "";
+    setLicMsg("✓ Açar yaradıldı. Kopyala və istifadəçiyə göndər.", true);
+    await loadLicenses();
+  } catch (e) {
+    setLicMsg(errorText(e));
+  } finally {
+    el.newButton.disabled = false;
+  }
+}
+
+async function copyText(text, btn, doneLabel) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch {}
+  if (!ok) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;opacity:0";
+    (btn.closest("dialog") || document.body).appendChild(ta);
+    ta.select();
+    try { ok = document.execCommand("copy"); } catch {}
+    ta.remove();
+  }
+  const old = btn.textContent;
+  btn.textContent = ok ? doneLabel : "✗";
+  setTimeout(() => { btn.textContent = old; }, 1300);
+}
+
+el.licBody.addEventListener("click", async ev => {
+  const btn = ev.target.closest("button[data-act]");
+  if (!btn) return;
+  const lic = licenses.find(l => l.id === btn.closest("tr").dataset.id);
+  if (!lic) return;
+  const act = btn.dataset.act;
+  const name = lic.note || lic.id;
+  if (act === "copy") return copyText(lic.id, btn, "✓");
+  if (act === "delete" && !btn.classList.contains("confirm")) {
+    btn.classList.add("confirm");
+    btn.textContent = "Təsdiqlə?";
+    setTimeout(() => { if (btn.isConnected) { btn.classList.remove("confirm"); btn.textContent = "Sil"; } }, 3000);
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const ref = fb.doc(db, licensesCol(), lic.id);
+    if (act === "toggle") {
+      await fb.updateDoc(ref, { active: lic.active === false });
+      setLicMsg(`✓ ${name}: ${lic.active === false ? "aktiv edildi" : "bloklandı"}.`, true);
+    } else if (act === "reset") {
+      await fb.updateDoc(ref, { deviceId: null, deviceName: null, activatedAt: null });
+      setLicMsg(`✓ ${name}: kompüterdən ayrıldı, açar yeni kompüterdə aktivləşə bilər.`, true);
+    } else if (act === "delete") {
+      await fb.deleteDoc(ref);
+      setLicMsg(`✓ ${name}: açar silindi.`, true);
+    }
+    await loadLicenses();
+  } catch (e) {
+    setLicMsg(errorText(e));
+    btn.disabled = false;
+  }
+});
+
+el.key.addEventListener("input", () => {
+  const formatted = formatKey(el.key.value);
+  if (formatted !== el.key.value) el.key.value = formatted;
+});
+el.form.addEventListener("submit", onActivate);
+el.cornerAdmin.addEventListener("click", openAdmin);
+el.adminButton.addEventListener("click", openAdmin);
+el.adminClose.addEventListener("click", () => el.adminDialog.close());
+el.adminForm.addEventListener("submit", onAdminSubmit);
+el.adminEye.addEventListener("click", () => {
+  const show = el.adminPass.type === "password";
+  el.adminPass.type = show ? "text" : "password";
+  el.adminEye.title = show ? "Parolu gizlət" : "Parolu göstər";
+});
+el.adminLogout.addEventListener("click", adminLogout);
+el.licensesButton.addEventListener("click", () => {
+  if (!isAdmin) return;
+  setLicMsg("");
+  el.newKeyBox.classList.add("hidden");
+  fillDurationSelect();
+  el.licDialog.showModal();
+  loadLicenses();
+});
+el.licClose.addEventListener("click", () => el.licDialog.close());
+el.newForm.addEventListener("submit", onCreateLicense);
+el.newKeyCopy.addEventListener("click", () => copyText(el.newKeyText.textContent, el.newKeyCopy, "✓ Kopyalandı"));
+el.newKeyMail.addEventListener("click", () => copyText(licenseMailText(), el.newKeyMail, "✓ Mətn kopyalandı"));
+el.planList.addEventListener("click", ev => {
+  const btn = ev.target.closest(".plan");
+  if (btn) selectPlan(btn.dataset.plan);
+});
+el.copyCard.addEventListener("click", () => copyText((sales?.card || "").replace(/\s+/g, ""), el.copyCard, "✓"));
+el.copyEmail.addEventListener("click", () => copyText(sales?.email || "", el.copyEmail, "✓"));
+el.mailGmail.addEventListener("click", () => openMail("gmail"));
+el.mailApp.addEventListener("click", () => openMail("mail"));
+el.search.addEventListener("input", renderLicenses);
+
+boot();
+</script>
+</body>
+
+</html>

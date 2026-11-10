@@ -1,0 +1,37 @@
+// =====================================================================
+// Exam Viewer — Firestore qaydaları (MÖVCUD bazaya ƏLAVƏ etmək üçün)
+//
+// Firebase konsolu → Firestore Database → Rules tab
+//   1) Əvvəl əlavə etdiyin köhnə "Exam Viewer" blokunu (examviewer_users) sil.
+//   2) Satış reyestrinin öz qaydalarına TOXUNMA.
+//   3) "match /databases/{database}/documents {" sətrini tap və aşağıdakı
+//      "BAŞLANĞIC" ilə "SON" arasındakı hissəni həmin sətrin altına yapışdır.
+//   4) Publish.
+//
+// Admin e-poçtu license_guard.py-dakı ADMIN_EMAIL ilə eyni olmalıdır.
+// =====================================================================
+
+    // ===== Exam Viewer: BAŞLANĞIC =====
+    function examViewerAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'admin@admin.com';
+    }
+
+    // examviewer_licenses/{AÇAR}:
+    //   note, active, expiresAt, deviceId, deviceName, activatedAt, lastSeen, createdAt
+    match /examviewer_licenses/{key} {
+      // açarı bilən yalnız həmin açarın sənədini oxuya bilər; siyahını yalnız admin görür
+      allow get: if true;
+      allow list, create, delete: if examViewerAdmin();
+      allow update: if examViewerAdmin()
+        // ilk aktivləşdirmə: açar hələ heç bir kompüterə bağlanmayıb
+        || (resource.data.active == true
+            && resource.data.get('deviceId', null) == null
+            && request.resource.data.deviceId is string
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['deviceId', 'deviceName', 'activatedAt', 'lastSeen']))
+        // proqram açılanda "son görülmə" vaxtı yenilənir
+        || (resource.data.active == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen']));
+    }
+    // ===== Exam Viewer: SON =====
