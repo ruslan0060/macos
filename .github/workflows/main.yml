@@ -1,0 +1,41 @@
+# Exam Viewer — Mac olmadan GitHub-da macOS versiyasını yığmaq üçün.
+# Bu faylı repoda .github/workflows/build-mac.yml yoluna qoy.
+# Repo kökündə ya macos/ qovluğu, ya da birbaşa bu qovluğun faylları ola bilər — hər ikisi işləyir.
+# GitHub → Actions → "macOS build" → Run workflow. Bitəndə .dmg faylları "Artifacts" bölməsində olur.
+name: macOS build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15         # Apple Silicon (M1/M2/M3/M4)
+            arch: arm64
+          - runner: macos-15-intel   # Intel Mac
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          if [ -f macos/build_mac.sh ]; then cd macos; fi
+          bash build_mac.sh
+        env:
+          PYTHON: python
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExamViewer-mac-${{ matrix.arch }}
+          path: "**/dist/ExamViewer-mac-*.dmg"
+          if-no-files-found: error
